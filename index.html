@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>めざせ！糖質計算マスター</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Kosugi+Maru&family=Zen+Maru+Gothic:wght@400;700&display=swap');
+    body {
+      font-family: 'Zen Maru Gothic', 'Kosugi Maru', sans-serif;
+      background-color: #f0fdf4; /* 優しい薄緑 */
+    }
+    ruby {
+      ruby-position: over;
+    }
+    rt {
+      font-size: 0.6em;
+      color: #16a34a;
+      letter-spacing: 0.05em;
+      padding-bottom: 0.1em;
+    }
+    .game-card {
+      box-shadow: 0 8px 0px #cbd5e1;
+    }
+    .game-card:active {
+      transform: translateY(4px);
+      box-shadow: 0 4px 0px #cbd5e1;
+    }
+    .btn-green {
+      box-shadow: 0 6px 0px #15803d;
+    }
+    .btn-green:active {
+      transform: translateY(3px);
+      box-shadow: 0 3px 0px #15803d;
+    }
+    .btn-blue {
+      box-shadow: 0 6px 0px #1d4ed8;
+    }
+    .btn-blue:active {
+      transform: translateY(3px);
+      box-shadow: 0 3px 0px #1d4ed8;
+    }
+    .btn-orange {
+      box-shadow: 0 6px 0px #c2410c;
+    }
+    .btn-orange:active {
+      transform: translateY(3px);
+      box-shadow: 0 3px 0px #c2410c;
+    }
+    /* スライダーの見た目カスタマイズ */
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #16a34a;
+      cursor: pointer;
+      border: 3px solid white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    /* アニメーション用 */
+    @keyframes bounce-slow {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+    .character-bounce {
+      animation: bounce-slow 3s ease-in-out infinite;
+    }
+    /* 紙吹雪のスタイル */
+    .confetti {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      animation: confetti-fall 3s linear infinite;
+      z-index: 50;
+    }
+    @keyframes confetti-fall {
+      0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(360deg); opacity: 0; }
+    }
+    /* キャンバスの設定：最大幅を指定して伸縮に対応 */
+    #nutritionistCanvas {
+      max-width: 100%;
+      height: auto;
+      border-radius: 0.75rem;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col text-slate-800">
+
+  <!-- ヘッダー -->
+  <header class="bg-white border-b-4 border-green-500 p-3 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <!-- タイトル -->
+      <div class="flex items-center gap-2">
+        <span class="text-3xl">🎒</span>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-bold text-green-700 flex items-center gap-1">
+            めざせ！糖質計算マスター
+          </h1>
+          <p class="text-xs text-slate-500 font-bold">
+            栄養士さんと一緒に、食べる糖質の量を計算しよう！
+          </p>
+        </div>
+      </div>
+      
+      <!-- よみあげ・リセットボタン -->
+      <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+        <button onclick="speakCurrentPage()" class="bg-yellow-400 hover:bg-yellow-500 text-slate-900 font-bold py-1.5 px-3 rounded-full flex items-center gap-2 border-b-4 border-yellow-600 transition-all text-xs sm:text-sm">
+          <i class="fa-solid fa-volume-high text-base"></i>
+          <span>よみあげる</span>
+        </button>
+        <button onclick="stopSpeaking()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-1.5 px-2.5 rounded-full transition-all text-xs" title="おとを止める">
+          <i class="fa-solid fa-volume-xmark"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- メインコンテンツ：スマホ縦画面に最適化したレイアウト -->
+  <main class="flex-grow max-w-4xl w-full mx-auto p-3 flex flex-col gap-4">
+    
+    <!-- 栄養士さんのガイドエリア（縦画面で横並びスリム表示） -->
+    <div class="w-full">
+      <div class="bg-white border-4 border-green-400 rounded-2xl p-3 flex flex-row items-center gap-3 relative shadow-md">
+        <!-- 栄養士さんキャラクター画像（自動描画） -->
+        <div class="w-24 sm:w-28 character-bounce shrink-0 relative flex flex-col items-center">
+          <canvas id="nutritionistCanvas" width="300" height="400"></canvas>
+          <div id="megumi-emotion" class="absolute -top-1 -right-1 text-2xl transition-all duration-300 scale-0 opacity-0 pointer-events-none drop-shadow"></div>
+        </div>
+        <!-- 吹き出し -->
+        <div class="flex-grow">
+          <div class="bg-green-50 border-2 border-green-300 rounded-xl p-2.5 text-xs sm:text-sm relative">
+            <span class="font-bold text-green-800 text-[10px] block mb-0.5">🏥 栄養士さん</span>
+            <p id="megumi-bubble" class="leading-relaxed">
+              こんにちは！いっしょに楽しくおべんきょうしましょう。上の「よみあげる」を押すと、わたしが声でお話しするよ！
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- メインワークエリア -->
+    <div id="workspace" class="w-full flex flex-col gap-3">
+      
+      <!-- モード切り替えタブ（スマホで折り返しやすいデザイン） -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-green-100 p-1.5 rounded-2xl border-2 border-green-300">
+        <button id="tab-study" onclick="switchTab('study')" class="py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 bg-green-600 text-white shadow-sm">
+          <span>✏️</span>
+          <span>1. おけいこ</span>
+        </button>
+        <button id="tab-quiz" onclick="switchTab('quiz')" class="py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 bg-white text-slate-600 hover:bg-slate-50 shadow-sm">
+          <span>❓</span>
+          <span>2. クイズ</span>
+        </button>
+        <button id="tab-calc" onclick="switchTab('calc')" class="py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 bg-white text-slate-600 hover:bg-slate-50 shadow-sm">
+          <span>🧮</span>
+          <span>3. じぶんで計算</span>
+        </button>
+        <button id="tab-note" onclick="switchTab('note')" class="py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 bg-white text-slate-600 hover:bg-slate-50 shadow-sm">
+          <span>📓</span>
+          <span>4. ひみつのノート</span>
+        </button>
+      </div>
+
+      <!-- タブコンテンツ①：おけいこモード -->
+      <div id="content-study" class="tab-content flex flex-col gap-3">
+        <div class="bg-white p-4 rounded-2xl border-4 border-green-500 shadow-md">
+          <h2 class="text-base sm:text-lg font-bold text-green-800 mb-3 flex items-center gap-1.5">
+            <span>🧁</span>
+            食べものを選んで、食べる量を変えてみよう！
+          </h2>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+            <button onclick="selectStudyFood('chips')" id="btn-food-chips" class="food-select-btn bg-green-100 border-2 border-green-500 p-2.5 rounded-xl flex flex-col items-center gap-1 transition-all">
+              <span class="text-2xl">🥔</span>
+              <span class="font-bold text-xs">ポテトチップス</span>
+            </button>
+            <button onclick="selectStudyFood('bread')" id="btn-food-bread" class="food-select-btn bg-slate-50 border-2 border-slate-200 p-2.5 rounded-xl flex flex-col items-center gap-1 transition-all hover:bg-green-50">
+              <span class="text-2xl">🥯</span>
+              <span class="font-bold text-xs">ロールパン</span>
+            </button>
+            <button onclick="selectStudyFood('banana')" id="btn-food-banana" class="food-select-btn bg-slate-50 border-2 border-slate-200 p-2.5 rounded-xl flex flex-col items-center gap-1 transition-all hover:bg-green-50">
+              <span class="text-2xl">🍌</span>
+              <span class="font-bold text-xs">バナナ</span>
+            </button>
+            <button onclick="selectStudyFood('juice')" id="btn-food-juice" class="food-select-btn bg-slate-50 border-2 border-slate-200 p-2.5 rounded-xl flex flex-col items-center gap-1 transition-all hover:bg-green-50">
+              <span class="text-2xl">🍹</span>
+              <span class="font-bold text-xs">オレンジジュース</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-yellow-50 p-3 rounded-xl border-2 border-yellow-300 flex flex-col gap-3 justify-between">
+              <div class="bg-white p-2.5 rounded-lg border border-yellow-400 shadow-sm">
+                <span class="text-[10px] bg-red-500 text-white font-bold py-0.5 px-2 rounded-full"><ruby>表<rt>ひょう</rt>示<rt>じ</rt></ruby>パッケージ</span>
+                <div class="mt-1.5 flex justify-between items-center">
+                  <div>
+                    <p class="text-xs font-bold text-slate-500"><ruby>基<rt>き</rt>準<rt>じゅん</rt></ruby>の量</p>
+                    <p id="study-package-unit" class="text-base font-bold text-slate-800">100g あたり</p>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-xs font-bold text-slate-500"><ruby>糖<rt>とう</rt>質<rt>しつ</rt></ruby>の量</p>
+                    <p id="study-package-carb" class="text-xl font-bold text-red-500">50g</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-white rounded-lg p-2 border border-yellow-300 h-36 flex items-center justify-center relative overflow-hidden">
+                <div class="absolute top-1 left-1 text-[10px] font-bold bg-green-100 text-green-800 px-1.5 py-0.5 rounded">
+                  お皿のようす
+                </div>
+                <svg id="study-visual-svg" viewBox="0 0 200 150" class="w-full h-full"></svg>
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-3 justify-between">
+              <div class="bg-blue-50 p-3 rounded-xl border-2 border-blue-300 flex flex-col gap-2">
+                <p class="font-bold text-blue-900 text-xs sm:text-sm flex items-center gap-1">
+                  <span>🍽️</span>
+                  どのくらい食べる？
+                </p>
+                <div class="flex items-center gap-2">
+                  <button onclick="adjustStudyAmount(-1)" class="w-10 h-10 bg-white hover:bg-slate-100 border-2 border-blue-400 rounded-full text-xl font-bold text-blue-700 flex items-center justify-center shadow-sm">－</button>
+                  <input type="range" id="study-range" min="1" max="4" step="1" value="2" oninput="updateStudy()" class="flex-grow h-3 bg-blue-200 rounded-lg appearance-none cursor-pointer">
+                  <button onclick="adjustStudyAmount(1)" class="w-10 h-10 bg-white hover:bg-slate-100 border-2 border-blue-400 rounded-full text-xl font-bold text-blue-700 flex items-center justify-center shadow-sm">＋</button>
+                </div>
+                <div class="text-center bg-white py-1.5 px-3 rounded-lg border border-blue-300">
+                  <span class="text-[10px] font-bold text-slate-500">あなたが食べる量</span>
+                  <p id="study-eat-amount" class="text-xl font-bold text-blue-600">100g</p>
+                </div>
+              </div>
+
+              <div class="bg-rose-50 p-3 rounded-xl border-2 border-rose-300">
+                <p class="font-bold text-rose-900 text-xs sm:text-sm mb-1.5 flex items-center gap-1">
+                  <span>💡</span>
+                  計算のしかた
+                </p>
+                <div class="grid grid-cols-5 gap-1 text-center items-center font-bold text-[11px] sm:text-xs">
+                  <div class="bg-blue-100 p-1.5 rounded-lg border border-blue-300">
+                    <div class="text-[9px] text-blue-600">食べる量</div>
+                    <div id="calc-eat" class="font-bold">100</div>
+                  </div>
+                  <div class="text-sm">÷</div>
+                  <div class="bg-yellow-100 p-1.5 rounded-lg border border-yellow-400">
+                    <div class="text-[9px] text-yellow-700">基準</div>
+                    <div id="calc-base" class="font-bold">100</div>
+                  </div>
+                  <div class="text-sm">＝</div>
+                  <div class="bg-purple-100 p-1.5 rounded-lg border border-purple-400">
+                    <div class="text-[9px] text-purple-700"><ruby>倍<rt>ばい</rt>率<rt>りつ</rt></ruby></div>
+                    <div id="calc-ratio" class="font-bold text-purple-700">1倍</div>
+                  </div>
+                </div>
+
+                <div class="flex justify-center my-1 text-sm font-bold text-rose-500">⬇️</div>
+
+                <div class="grid grid-cols-5 gap-1 text-center items-center font-bold text-[11px] sm:text-xs">
+                  <div class="bg-red-100 p-1.5 rounded-lg border border-red-300">
+                    <div class="text-[9px] text-red-600"><ruby>糖<rt>とう</rt>質<rt>しつ</rt></ruby></div>
+                    <div id="calc-carb" class="font-bold">50g</div>
+                  </div>
+                  <div class="text-sm">×</div>
+                  <div class="bg-purple-100 p-1.5 rounded-lg border border-purple-400">
+                    <div class="text-[9px] text-purple-700"><ruby>倍<rt>ばい</rt>率<rt>りつ</rt></ruby></div>
+                    <div id="calc-ratio2" class="font-bold text-purple-700">1倍</div>
+                  </div>
+                  <div class="text-sm">＝</div>
+                  <div class="bg-green-500 text-white p-1.5 rounded-lg border border-green-600 animate-pulse">
+                    <div class="text-[9px] text-white">答え</div>
+                    <div id="calc-result" class="text-base font-extrabold">50g</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- タブコンテンツ②：クイズモード -->
+      <div id="content-quiz" class="tab-content hidden flex flex-col gap-3">
+        <div id="quiz-intro-screen" class="bg-white p-5 rounded-2xl border-4 border-yellow-400 shadow-md text-center">
+          <span class="text-5xl block mb-3">🏆</span>
+          <h2 class="text-xl font-bold text-slate-800 mb-2">
+            <ruby>糖<rt>とう</rt>質<rt>しつ</rt></ruby><ruby>計<rt>けい</rt>算<rt>さん</rt></ruby>クイズにチャレンジ！
+          </h2>
+          <p class="text-xs sm:text-sm text-slate-600 mb-4 leading-relaxed">
+            おけいこで学んだことをいかして、クイズに答えてみよう！<br>
+            ぜんぶで4つの問題が出るよ。満点をめざしてがんばろう！
+          </p>
+          <button onclick="startQuiz()" class="btn-orange bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-8 rounded-xl text-base transition-all w-full max-w-xs">
+            スタートする！
+          </button>
+        </div>
+
+        <div id="quiz-play-screen" class="hidden bg-white p-4 rounded-2xl border-4 border-yellow-400 shadow-md flex flex-col gap-3">
+          <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+            <span class="font-bold text-sm text-yellow-700" id="quiz-progress-text">第 1 問 / 4 問</span>
+            <div class="flex gap-1" id="quiz-stars"></div>
+          </div>
+
+          <div class="bg-yellow-50 p-3 rounded-xl border border-yellow-200">
+            <h3 id="quiz-question-text" class="text-sm sm:text-base font-bold text-slate-800 leading-relaxed"></h3>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-2 h-36 flex items-center justify-center relative">
+              <svg id="quiz-visual-svg" viewBox="0 0 200 150" class="w-full h-full"></svg>
+            </div>
+            <div id="quiz-hint-box" class="bg-green-50 border border-green-200 rounded-xl p-3 flex items-start gap-2">
+              <span class="text-2xl">💡</span>
+              <div>
+                <span class="font-bold text-green-800 text-[10px] block mb-0.5">栄養士さんのヒント</span>
+                <p id="quiz-hint-text" class="text-xs text-slate-600 leading-relaxed"></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1" id="quiz-options-container"></div>
+
+          <div id="quiz-feedback-box" class="hidden p-3 rounded-xl border-4 text-center flex flex-col items-center gap-1.5 transition-all">
+            <div class="flex items-center gap-2">
+              <span id="feedback-icon" class="text-2xl"></span>
+              <span id="feedback-title" class="text-lg font-extrabold"></span>
+            </div>
+            <p id="feedback-desc" class="font-bold text-xs sm:text-sm text-slate-700"></p>
+            <button onclick="nextQuizStep()" id="quiz-next-btn" class="btn-green bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg text-xs mt-1 transition-all">
+              つぎへ進む
+            </button>
+          </div>
+        </div>
+
+        <div id="quiz-result-screen" class="hidden bg-white p-5 rounded-2xl border-4 border-green-500 shadow-md text-center flex flex-col items-center gap-4 relative overflow-hidden">
+          <div id="confetti-container" class="absolute inset-0 pointer-events-none"></div>
+          <span class="text-6xl">👑</span>
+          <h2 class="text-xl font-extrabold text-green-700">おめでとう！がんばったね！</h2>
+          
+          <div class="border-2 border-yellow-400 bg-yellow-50 p-4 rounded-xl max-w-sm w-full relative">
+            <p class="text-sm font-bold text-slate-700 mb-1">🏅 糖質計算マスター</p>
+            <p class="text-3xl font-black text-red-500 my-2" id="quiz-score-display">4 / 4 点</p>
+            <p class="text-xs font-bold text-slate-600 leading-relaxed" id="quiz-praise-text"></p>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-2 w-full justify-center">
+            <button onclick="startQuiz()" class="btn-orange bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition-all">もう一回やる！</button>
+            <button onclick="switchTab('study')" class="btn-blue bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition-all">おけいこに戻る</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- タブコンテンツ③：じぶんで計算（電卓） -->
+      <div id="content-calc" class="tab-content hidden flex flex-col gap-3">
+        <div class="bg-white p-4 rounded-2xl border-4 border-blue-500 shadow-md">
+          <h2 class="text-base sm:text-lg font-bold text-blue-800 mb-2 flex items-center gap-1.5">
+            <span>🧮</span>
+            おうちのお菓子の数字を入れてみよう！
+          </h2>
+          <p class="text-xs sm:text-sm text-slate-600 mb-4 leading-relaxed">
+            パッケージのうしろにある「えいようせいぶん表示」の数字を入れると、食べる分の糖質がすぐにわかるよ！
+          </p>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="flex flex-col gap-3 bg-blue-50 p-4 rounded-xl border-2 border-blue-200">
+              <div>
+                <label class="block font-bold text-blue-900 text-xs mb-1">✏️ 食べものの名前</label>
+                <input type="text" id="user-food-name" placeholder="例：クッキー、ブランパン" class="w-full p-2.5 rounded-lg border border-blue-300 text-sm font-bold">
+              </div>
+
+              <div>
+                <label class="block font-bold text-blue-900 text-xs mb-1">📦 パッケージの基準</label>
+                <div class="flex gap-2">
+                  <input type="number" id="user-base-amount" value="100" class="w-1/2 p-2.5 rounded-lg border border-blue-300 text-center font-bold text-sm">
+                  <select id="user-base-unit" onchange="syncCalcUnits()" class="w-1/2 p-2.5 rounded-lg border border-blue-300 font-bold bg-white text-sm">
+                    <option value="g">グラム (g)</option>
+                    <option value="個">個・袋</option>
+                    <option value="ml">ミリリットル (ml)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="bg-white p-2.5 rounded-lg border border-teal-300 shadow-sm">
+                <label class="flex items-center gap-2 cursor-pointer font-bold text-teal-800 text-xs">
+                  <input type="checkbox" id="user-use-fiber" onchange="toggleFiberInput()" class="w-4 h-4 accent-teal-600 cursor-pointer">
+                  <span>🌾 炭水化物と食物繊維から計算する</span>
+                </label>
+              </div>
+
+              <div id="user-direct-carb-group" class="transition-all">
+                <label class="block font-bold text-blue-900 text-xs mb-1">🍭 パッケージの糖質の量</label>
+                <div class="flex items-center gap-2">
+                  <input type="number" id="user-carb-amount" value="20" oninput="calculateUserCarb()" class="w-full p-2.5 rounded-lg border border-blue-300 font-bold text-sm">
+                  <span class="font-bold text-xs">g</span>
+                </div>
+              </div>
+
+              <div id="user-split-carb-group" class="hidden flex-col gap-2 p-2.5 bg-teal-50/50 rounded-lg border border-teal-200">
+                <div>
+                  <label class="block font-bold text-teal-900 text-[11px] mb-0.5">🍞 炭水化物</label>
+                  <input type="number" id="user-carbo-split" value="25" oninput="updateCarbFromSplit()" class="w-full p-2 rounded-lg border border-teal-300 font-bold text-xs text-center">
+                </div>
+                <div>
+                  <label class="block font-bold text-teal-900 text-[11px] mb-0.5">🥗 食物繊維</label>
+                  <input type="number" id="user-fiber-split" value="5" oninput="updateCarbFromSplit()" class="w-full p-2 rounded-lg border border-teal-300 font-bold text-xs text-center">
+                </div>
+                <div class="flex justify-between items-center bg-white p-1.5 rounded border border-teal-200 font-bold text-[11px]">
+                  <span class="text-slate-500">糖質:</span>
+                  <span id="user-auto-carb-result" class="text-red-500">20.0 g</span>
+                </div>
+              </div>
+
+              <div>
+                <label class="block font-bold text-blue-900 text-xs mb-1">🍽️ 実際に食べる量</label>
+                <div class="flex items-center gap-2">
+                  <input type="number" id="user-eat-amount" value="150" oninput="calculateUserCarb()" class="w-full p-2.5 rounded-lg border border-blue-300 font-bold text-sm">
+                  <span id="user-eat-unit-label" class="font-bold text-xs">g</span>
+                </div>
+              </div>
+
+              <button onclick="calculateUserCarb()" class="btn-green bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition-all w-full flex items-center justify-center gap-2">
+                <i class="fa-solid fa-calculator"></i>
+                <span>けいさんする！</span>
+              </button>
+            </div>
+
+            <div class="flex flex-col justify-between bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <div class="text-center">
+                <span class="text-[10px] bg-blue-600 text-white font-bold py-0.5 px-2.5 rounded-full">計算結果</span>
+                <div class="my-3">
+                  <p class="text-slate-500 font-bold text-xs" id="user-result-title">ポテトチップス 150g のとき</p>
+                  <p id="user-calc-result-display" class="text-4xl font-black text-green-600 my-2">30.0 <span class="text-xl">g</span></p>
+                </div>
+              </div>
+
+              <div class="bg-white p-3 rounded-lg border border-slate-300 shadow-inner">
+                <p class="text-[11px] font-bold text-slate-500 mb-1.5">🧮 計算のようす（中身）：</p>
+                <div class="flex flex-col gap-1.5 font-bold text-[11px]">
+                  <div id="user-calc-fiber-step" class="hidden flex flex-col gap-0.5 bg-teal-50 p-1.5 rounded border border-teal-200">
+                    <span id="user-calc-fiber-formula" class="text-teal-700">炭水化物 25g － 食物繊維 5g ＝ 20g</span>
+                  </div>
+                  <div class="flex justify-between items-center bg-purple-50 p-1.5 rounded border border-purple-200">
+                    <span>① 倍率：</span>
+                    <span id="user-calc-ratio" class="text-purple-700">1.5 倍</span>
+                  </div>
+                  <div class="flex justify-between items-center bg-red-50 p-1.5 rounded border border-red-200">
+                    <span>② かけ算：</span>
+                    <span id="user-calc-multiply" class="text-red-600">30g</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- タブコンテンツ④：ひみつのノート -->
+      <div id="content-note" class="tab-content hidden flex flex-col gap-3">
+        <div class="bg-white p-4 rounded-2xl border-4 border-teal-500 shadow-md">
+          <h2 class="text-base sm:text-lg font-bold text-teal-800 mb-4 flex items-center gap-1.5">
+            <span>📓</span>
+            ひみつのノート（アドバイス）
+          </h2>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-teal-50 p-4 rounded-xl border-2 border-teal-200 flex flex-col gap-2">
+              <span class="text-3xl">🌾</span>
+              <h3 class="text-sm sm:text-base font-bold text-teal-900">
+                「炭水化物」から「食物繊維」を引くひみつ
+              </h3>
+              <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                パッケージに「糖質」となくて「炭水化物」「食物繊維」があるときは、この引き算で本当の糖質がわかるよ！
+              </p>
+              <div class="bg-white p-2.5 rounded-lg border border-teal-300 text-center font-bold text-xs mt-auto">
+                <div class="bg-teal-100/50 p-1.5 rounded text-slate-800 text-xs font-extrabold flex justify-center items-center gap-1">
+                  <span>炭水化物</span><span class="text-rose-500">－</span><span>食物繊維</span><span class="text-green-600">＝</span><span class="text-red-500">糖質</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="bg-rose-50 p-4 rounded-xl border-2 border-rose-200 flex flex-col gap-2">
+              <span class="text-3xl">🥤</span>
+              <h3 class="text-sm sm:text-base font-bold text-rose-900">
+                「0キロカロリー」のひみつ
+              </h3>
+              <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                「0kcal」でも糖質があるのは、体に吸収されない甘味料が使われているためです。迷ったらお医者さんに聞いてね！
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- フッター -->
+  <footer class="bg-slate-800 text-slate-400 py-4 px-3 mt-4 text-center border-t-4 border-slate-900">
+    <p class="text-xs font-bold">© 2026 めざせ！糖質計算マスター</p>
+    <p class="text-[10px] text-slate-500 mt-0.5">※計算結果は目安です。インスリン投与は主治医の指示に従ってください。</p>
+  </footer>
+
+  <script>
+    let currentTab = 'study';
+    let currentFood = 'chips';
+    
+    const foodData = {
+      chips: { name: 'ポテトチップス', unitVal: 100, unitStr: '100g あたり', unitLabel: 'g', carb: 50, steps: [50, 100, 150, 200], defaultIndex: 1, desc: 'ポテトチップスはじゃがいもと油でできているから糖質が高めだよ！' },
+      bread: { name: 'ロールパン', unitVal: 4, unitStr: '1袋（4個入り）あたり', unitLabel: '個', carb: 60, steps: [1, 2, 3, 4], defaultIndex: 1, desc: 'ロールパンは1個食べると糖質は15gになるよ。食べる数だけかけ算しよう！' },
+      banana: { name: 'バナナ', unitVal: 1, unitStr: '1本 あたり', unitLabel: '本', carb: 20, steps: [0.5, 1, 1.5, 2], defaultIndex: 1, desc: 'くだもののバナナはエネルギーになる糖質もしっかり入っているよ！' },
+      juice: { name: 'オレンジジュース', unitVal: 200, unitStr: '200ml あたり', unitLabel: 'ml', carb: 22, steps: [100, 200, 300, 400], defaultIndex: 1, desc: '飲みものはゴクゴク飲めちゃうから、飲みすぎると糖質がたくさんになるよ。' }
+    };
+
+    const quizQuestions = [
+      { food: 'chips', qText: 'ポテトチップス（基準：100gで 糖質：50g）を「50g」食べました。<ruby>糖<rt>とう</rt>質<rt>しつ</rt></ruby>はなんg？', hint: '50gは基準の100gのちょうど半分だね！', options: ['10g', '25g', '50g'], correctIdx: 1, explain: '食べる量が半分なので、50g × 0.5 ＝ 25g です！', eatVal: 50, unitLabel: 'g' },
+      { food: 'bread', qText: 'ロールパン（基準：4個で 糖質：60g）を「1個」食べました。<ruby>糖<rt>とう</rt>質<rt>しつ</rt></ruby>はなんg？', hint: '4個で60gだから、1個分は60を4でわろう！', options: ['15g', '30g', '20g'], correctIdx: 0, explain: '食べる量は4分の1なので、60g ÷ 4 ＝ 15g です！', eatVal: 1, unitLabel: '個' },
+      { food: 'banana', qText: 'バナナ（基準：1本で 糖質：20g）を「1.5本」食べました。<ruby>糖<rt>とう</rt>質<rt>しつ</rt></ruby>はなんg？', hint: '1本20g、半分は10gだよ！', options: ['20g', '30g', '40g'], correctIdx: 1, explain: '1.5倍なので、20g × 1.5 ＝ 30g です！', eatVal: 1.5, unitLabel: '本' },
+      { food: 'juice', qText: 'オレンジジュース（基準：200mlで 糖質：22g）を「400ml」飲みました。<ruby>糖<rt>とう</rt>質<rt>しつ</rt></ruby>はなんg？', hint: '400mlは200mlのちょうど2倍だね！', options: ['22g', '33g', '44g'], correctIdx: 2, explain: '2倍なので、22g × 2 ＝ 44g です！', eatVal: 400, unitLabel: 'ml' }
+    ];
+
+    let currentQuizIdx = 0;
+    let quizScore = 0;
+    let quizState = 'question';
+
+    const playSound = (type) => {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (type === 'correct') {
+          const osc1 = ctx.createOscillator();
+          const osc2 = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc1.connect(gain); osc2.connect(gain); gain.connect(ctx.destination);
+          osc1.frequency.setValueAtTime(523.25, ctx.currentTime);
+          osc1.frequency.setValueAtTime(659.25, ctx.currentTime + 0.15);
+          osc2.frequency.setValueAtTime(1046.50, ctx.currentTime + 0.15);
+          gain.gain.setValueAtTime(0.2, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          osc1.start(); osc2.start(); osc1.stop(ctx.currentTime + 0.5); osc2.stop(ctx.currentTime + 0.5);
+        } else if (type === 'incorrect') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(150, ctx.currentTime);
+          osc.frequency.linearRampToValueAtTime(120, ctx.currentTime + 0.3);
+          gain.gain.setValueAtTime(0.2, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+          osc.start(); osc.stop(ctx.currentTime + 0.4);
+        } else if (type === 'click') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.setValueAtTime(600, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.1, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+          osc.start(); osc.stop(ctx.currentTime + 0.1);
+        } else if (type === 'clear') {
+          const notes = [523.25, 659.25, 783.99, 1046.50];
+          notes.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.1);
+            gain.gain.setValueAtTime(0.15, ctx.currentTime + idx * 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + idx * 0.1 + 0.5);
+            osc.start(ctx.currentTime + idx * 0.1); osc.stop(ctx.currentTime + idx * 0.1 + 0.5);
+          });
+        }
+      } catch (e) {}
+    };
+
+    let speechSynth = window.speechSynthesis;
+    const speakText = (text) => {
+      if (!speechSynth) return;
+      speechSynth.cancel();
+      const cleanText = text.replace(/<rt>.*?<\/rt>|<ruby>|<\/ruby>/g, "");
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = 'ja-JP'; utterance.rate = 0.85; utterance.pitch = 1.1;
+      speechSynth.speak(utterance);
+    };
+
+    const stopSpeaking = () => { if (speechSynth) speechSynth.cancel(); };
+
+    const speakCurrentPage = () => {
+      playSound('click');
+      let textToSpeak = "";
+      if (currentTab === 'study') {
+        const food = foodData[currentFood];
+        const range = document.getElementById('study-range');
+        const eatVal = food.steps[parseInt(range.value) - 1];
+        const ratio = eatVal / food.unitVal;
+        const result = ratio * food.carb;
+        textToSpeak = `${food.name}のおけいこ。基準は${food.unitStr}、糖質${food.carb}グラム。食べる量は${eatVal}${food.unitLabel}。倍率は${ratio}倍、糖質は${result}グラムになります。`;
+      } else if (currentTab === 'quiz') {
+        textToSpeak = "糖質計算クイズに挑戦しよう！上のボタンから進めてね。";
+      } else if (currentTab === 'calc') {
+        textToSpeak = "自分で計算モードです。パッケージの数字を入れて計算してみましょう。";
+      } else if (currentTab === 'note') {
+        textToSpeak = "ひみつのノート。炭水化物から食物繊維を引くと糖質が計算できます。";
+      }
+      speakText(textToSpeak);
+    };
+
+    const changeMegumiFace = (expression) => {
+      const emotion = document.getElementById('megumi-emotion');
+      const canvas = document.getElementById('nutritionistCanvas');
+      if (!emotion || !canvas) return;
+      canvas.classList.remove('animate-bounce');
+      if (expression === 'happy' || expression === 'sparkle') {
+        emotion.innerText = "✨";
+        emotion.className = "absolute -top-1 -right-1 text-2xl transition-all duration-300 scale-100 opacity-100 animate-pulse";
+        canvas.classList.add('animate-bounce');
+      } else if (expression === 'thinking') {
+        emotion.innerText = "🤔";
+        emotion.className = "absolute -top-1 -right-1 text-2xl transition-all duration-300 scale-100 opacity-100";
+      } else {
+        emotion.className = "absolute -top-1 -right-1 text-2xl transition-all duration-300 scale-0 opacity-0";
+      }
+    };
+
+    function switchTab(tabId) {
+      playSound('click');
+      stopSpeaking();
+      currentTab = tabId;
+      const tabs = ['study', 'quiz', 'calc', 'note'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        const content = document.getElementById(`content-${t}`);
+        if (t === tabId) {
+          btn.className = "py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 bg-green-600 text-white shadow-sm";
+          content.classList.remove('hidden');
+        } else {
+          btn.className = "py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 bg-white text-slate-600 hover:bg-slate-50 shadow-sm";
+          content.classList.add('hidden');
+        }
+      });
+      const bubble = document.getElementById('megumi-bubble');
+      changeMegumiFace('normal');
+      if (tabId === 'study') { bubble.innerHTML = `おけいこモードだよ。量を変えて糖質がどう変わるか見てみよう！`; updateStudy(); }
+      else if (tabId === 'quiz') { bubble.innerHTML = `クイズモード！全問せいかいめざしてがんばろう！`; resetQuizState(); }
+      else if (tabId === 'calc') { bubble.innerHTML = `自分で計算モード！おやつの数字を入れてみてね！`; calculateUserCarb(); }
+      else if (tabId === 'note') { bubble.innerHTML = `ひみつのノート！役立つヒントをまとめたよ。`; }
+    }
+
+    function selectStudyFood(foodId) {
+      playSound('click');
+      currentFood = foodId;
+      document.querySelectorAll('.food-select-btn').forEach(btn => {
+        btn.classList.replace('bg-green-100', 'bg-slate-50');
+        btn.classList.replace('border-green-500', 'border-slate-200');
+      });
+      const activeBtn = document.getElementById(`btn-food-${foodId}`);
+      activeBtn.classList.replace('bg-slate-50', 'bg-green-100');
+      activeBtn.classList.replace('border-slate-200', 'border-green-500');
+
+      const food = foodData[foodId];
+      const range = document.getElementById('study-range');
+      range.value = food.defaultIndex + 1;
+      document.getElementById('megumi-bubble').innerText = food.desc;
+      changeMegumiFace('normal');
+      updateStudy();
+    }
+
+    function adjustStudyAmount(direction) {
+      playSound('click');
+      const range = document.getElementById('study-range');
+      let val = parseInt(range.value) + direction;
+      if (val >= 1 && val <= 4) { range.value = val; updateStudy(); }
+    }
+
+    function updateStudy() {
+      const food = foodData[currentFood];
+      const range = document.getElementById('study-range');
+      const stepIdx = parseInt(range.value) - 1;
+      const eatVal = food.steps[stepIdx];
+
+      document.getElementById('study-package-unit').innerText = food.unitStr;
+      document.getElementById('study-package-carb').innerText = `${food.carb}g`;
+      document.getElementById('study-eat-amount').innerText = `${eatVal}${food.unitLabel}`;
+
+      const ratio = eatVal / food.unitVal;
+      const finalCarb = ratio * food.carb;
+
+      document.getElementById('calc-eat').innerText = eatVal;
+      document.getElementById('calc-base').innerText = food.unitVal;
+      document.getElementById('calc-ratio').innerText = `${ratio}倍`;
+      document.getElementById('calc-ratio2').innerText = `${ratio}倍`;
+      document.getElementById('calc-carb').innerText = `${food.carb}g`;
+      document.getElementById('calc-result').innerText = `${Number.isInteger(finalCarb) ? finalCarb : finalCarb.toFixed(1)}g`;
+
+      drawFoodVisual('study-visual-svg', currentFood, eatVal);
+    }
+
+    function drawFoodVisual(svgId, foodType, amount) {
+      const svg = document.getElementById(svgId);
+      if (!svg) return;
+      let html = `<ellipse cx="100" cy="110" rx="80" ry="25" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="4"/><ellipse cx="100" cy="108" rx="72" ry="20" fill="#ffffff"/>`;
+      if (foodType === 'chips') {
+        const count = Math.min(25, Math.max(5, amount / 10));
+        const posArr = [{x:100,y:95},{x:80,y:105},{x:120,y:105},{x:90,y:100},{x:110,y:100},{x:70,y:108},{x:130,y:108},{x:100,y:105},{x:85,y:90},{x:115,y:90}];
+        for (let i = 0; i < count; i++) {
+          const p = posArr[i % posArr.length];
+          html += `<g transform="translate(${p.x}, ${p.y}) rotate(${i * 15})"><ellipse cx="0" cy="0" rx="16" ry="10" fill="#fde047" stroke="#ca8a04" stroke-width="2"/></g>`;
+        }
+      } else if (foodType === 'bread') {
+        const count = Math.round(amount);
+        const posArr = [{x:100,y:100},{x:70,y:105},{x:130,y:105},{x:100,y:85}];
+        for (let i = 0; i < count; i++) {
+          const p = posArr[i];
+          html += `<g transform="translate(${p.x}, ${p.y})"><ellipse cx="0" cy="0" rx="25" ry="16" fill="#ca8a04" stroke="#78350f" stroke-width="3"/></g>`;
+        }
+      } else if (foodType === 'banana') {
+        html += `<g transform="translate(100, 100) rotate(-20)"><path d="M -35,-15 Q 0,25 35,-15 Q 0,5 -35,-15" fill="#facc15" stroke="#78350f" stroke-width="3"/></g>`;
+      } else if (foodType === 'juice') {
+        html += `<g transform="translate(100, 0)"><rect x="-25" y="40" width="50" height="70" rx="5" fill="#f97316"/><ellipse cx="0" cy="40" rx="25" ry="6" fill="#fb923c"/></g>`;
+      }
+      svg.innerHTML = html;
+    }
+
+    function resetQuizState() {
+      currentQuizIdx = 0; quizScore = 0; quizState = 'question';
+      document.getElementById('quiz-intro-screen').classList.remove('hidden');
+      document.getElementById('quiz-play-screen').classList.add('hidden');
+      document.getElementById('quiz-result-screen').classList.add('hidden');
+    }
+
+    function startQuiz() {
+      playSound('click');
+      currentQuizIdx = 0; quizScore = 0; quizState = 'question';
+      document.getElementById('quiz-intro-screen').classList.add('hidden');
+      document.getElementById('quiz-result-screen').classList.add('hidden');
+      document.getElementById('quiz-play-screen').classList.remove('hidden');
+      changeMegumiFace('normal');
+      showQuizQuestion();
+    }
+
+    function showQuizQuestion() {
+      quizState = 'question';
+      const q = quizQuestions[currentQuizIdx];
+      document.getElementById('quiz-feedback-box').classList.add('hidden');
+      document.getElementById('quiz-progress-text').innerText = `第 ${currentQuizIdx + 1} 問 / 4 問`;
+      document.getElementById('quiz-question-text').innerHTML = q.qText;
+      document.getElementById('quiz-hint-text').innerHTML = q.hint;
+      document.getElementById('megumi-bubble').innerText = `第${currentQuizIdx + 1}問！考えてみてね！`;
+      changeMegumiFace('normal');
+
+      const stars = document.getElementById('quiz-stars');
+      stars.innerHTML = "";
+      for (let i = 0; i < 4; i++) {
+        stars.innerHTML += (i < currentQuizIdx) ? `<span class="text-yellow-500 text-sm">★</span>` : `<span class="text-slate-300 text-sm">☆</span>`;
+      }
+
+      drawFoodVisual('quiz-visual-svg', q.food, q.eatVal);
+
+      const optionsContainer = document.getElementById('quiz-options-container');
+      optionsContainer.innerHTML = "";
+      q.options.forEach((opt, idx) => {
+        optionsContainer.innerHTML += `<button onclick="answerQuiz(${idx})" class="quiz-opt-btn btn-blue bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl text-sm transition-all text-center">${opt}</button>`;
+      });
+    }
+
+    function syncCalcUnits() {
+      const unit = document.getElementById('user-base-unit').value;
+      document.getElementById('user-eat-unit-label').innerText = unit === 'g' ? 'g' : (unit === 'ml' ? 'ml' : '個');
+    }
+
+    function toggleFiberInput() {
+      playSound('click');
+      const useFiber = document.getElementById('user-use-fiber').checked;
+      const directGroup = document.getElementById('user-direct-carb-group');
+      const splitGroup = document.getElementById('user-split-carb-group');
+      const fiberStepBox = document.getElementById('user-calc-fiber-step');
+
+      if (useFiber) {
+        directGroup.classList.add('hidden');
+        splitGroup.classList.remove('hidden');
+        splitGroup.classList.add('flex');
+        fiberStepBox.classList.remove('hidden');
+        updateCarbFromSplit();
+      } else {
+        directGroup.classList.remove('hidden');
+        splitGroup.classList.add('hidden');
+        splitGroup.classList.remove('flex');
+        fiberStepBox.classList.add('hidden');
+        calculateUserCarb();
+      }
+    }
+
+    function updateCarbFromSplit() {
+      const carbo = parseFloat(document.getElementById('user-carbo-split').value) || 0;
+      const fiber = parseFloat(document.getElementById('user-fiber-split').value) || 0;
+      const calculatedCarb = Math.max(0, carbo - fiber);
+      document.getElementById('user-auto-carb-result').innerText = `${calculatedCarb.toFixed(1)} g`;
+      document.getElementById('user-calc-fiber-formula').innerText = `炭水化物 ${carbo}g － 食物繊維 ${fiber}g ＝ ${calculatedCarb.toFixed(1)}g`;
+      calculateUserCarb();
+    }
+
+    function calculateUserCarb() {
+      const foodName = document.getElementById('user-food-name').value || "おやつ";
+      const base = parseFloat(document.getElementById('user-base-amount').value);
+      const unit = document.getElementById('user-base-unit').value;
+      const eat = parseFloat(document.getElementById('user-eat-amount').value);
+      const useFiber = document.getElementById('user-use-fiber').checked;
+
+      let carb = useFiber ? Math.max(0, (parseFloat(document.getElementById('user-carbo-split').value) || 0) - (parseFloat(document.getElementById('user-fiber-split').value) || 0)) : parseFloat(document.getElementById('user-carb-amount').value);
+
+      if (isNaN(base) || base <= 0 || isNaN(carb) || isNaN(eat)) {
+        document.getElementById('user-calc-result-display').innerHTML = `<span class="text-xs text-red-500">数値を正しく入力してね</span>`;
+        return;
+      }
+
+      const ratio = eat / base;
+      const finalCarb = ratio * carb;
+
+      document.getElementById('user-result-title').innerText = `${foodName} ${eat}${unit} のとき`;
+      document.getElementById('user-calc-result-display').innerHTML = `${finalCarb.toFixed(1)} <span class="text-xl">g</span>`;
+      document.getElementById('user-calc-ratio').innerText = `${ratio.toFixed(2)} 倍`;
+      document.getElementById('user-calc-multiply').innerText = `${finalCarb.toFixed(1)} g`;
+      document.getElementById('megumi-bubble').innerText = `計算できたよ！${foodName}を${eat}${unit}食べると糖質は【${finalCarb.toFixed(1)}g】だよ。`;
+    }
+
+    function answerQuiz(selectedIdx) {
+      if (quizState !== 'question') return;
+      quizState = 'answered';
+      const q = quizQuestions[currentQuizIdx];
+      const isCorrect = (selectedIdx === q.correctIdx);
+
+      document.querySelectorAll('.quiz-opt-btn').forEach(btn => {
+        btn.disabled = true;
+        btn.classList.replace('bg-blue-600', 'bg-slate-400');
+      });
+
+      const feedbackBox = document.getElementById('quiz-feedback-box');
+      feedbackBox.classList.remove('hidden');
+
+      if (isCorrect) {
+        playSound('correct'); quizScore++; changeMegumiFace('happy');
+        feedbackBox.className = "p-3 rounded-xl border-2 border-green-500 bg-green-50 text-green-800 text-center flex flex-col items-center gap-1 mt-2";
+        document.getElementById('feedback-icon').innerText = "⭕";
+        document.getElementById('feedback-title').innerText = "正解！";
+        document.getElementById('feedback-desc').innerHTML = q.explain;
+        document.getElementById('megumi-bubble').innerText = `大せいかい！素晴らしい！`;
+      } else {
+        playSound('incorrect'); changeMegumiFace('thinking');
+        feedbackBox.className = "p-3 rounded-xl border-2 border-red-400 bg-red-50 text-red-800 text-center flex flex-col items-center gap-1 mt-2";
+        document.getElementById('feedback-icon').innerText = "❌";
+        document.getElementById('feedback-title').innerText = "おしい！";
+        document.getElementById('feedback-desc').innerHTML = q.explain;
+        document.getElementById('megumi-bubble').innerText = `おしいっ！解説を読んでみてね。`;
+      }
+    }
+
+    function nextQuizStep() {
+      playSound('click');
+      currentQuizIdx++;
+      if (currentQuizIdx < quizQuestions.length) showQuizQuestion();
+      else showQuizResults();
+    }
+
+    function showQuizResults() {
+      stopSpeaking();
+      document.getElementById('quiz-play-screen').classList.add('hidden');
+      document.getElementById('quiz-result-screen').classList.remove('hidden');
+      playSound('clear'); changeMegumiFace('sparkle');
+      document.getElementById('quiz-score-display').innerText = `${quizScore} / 4 点`;
+      document.getElementById('quiz-praise-text').innerText = quizScore === 4 ? "満点！糖質マスターだね！すばらしい！" : "よくがんばったね！また挑戦してね！";
+      document.getElementById('megumi-bubble').innerText = `クイズおつかれさま！スコアは${quizScore}点だよ！`;
+      
+      const container = document.getElementById('confetti-container');
+      container.innerHTML = "";
+      const colors = ['#f43f5e', '#3b82f6', '#10b981', '#f59e0b', '#a855f7'];
+      for (let i = 0; i < 30; i++) {
+        const c = document.createElement('div');
+        c.className = 'confetti';
+        c.style.left = `${Math.random() * 100}%`;
+        c.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        c.style.animationDuration = `${2 + Math.random() * 2}s`;
+        container.appendChild(c);
+      }
+    }
+
+    function drawNutritionistAvatar() {
+      const canvas = document.getElementById('nutritionistCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#dcfce7';
+      ctx.beginPath(); ctx.arc(150, 190, 110, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.moveTo(90, 310); ctx.quadraticCurveTo(150, 260, 210, 310); ctx.lineTo(240, 400); ctx.lineTo(60, 400); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#16a34a';
+      ctx.beginPath(); ctx.moveTo(135, 290); ctx.lineTo(150, 330); ctx.lineTo(165, 290); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#fed7aa'; ctx.fillRect(138, 230, 24, 50);
+      ctx.beginPath(); ctx.arc(150, 175, 55, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath(); ctx.arc(150, 170, 58, Math.PI, Math.PI * 2, false); ctx.fill();
+      ctx.beginPath(); ctx.arc(150, 115, 20, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#f43f5e'; ctx.beginPath(); ctx.arc(150, 115, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1e293b';
+      ctx.beginPath(); ctx.arc(130, 175, 6, 0, Math.PI * 2); ctx.arc(170, 175, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(128, 173, 2, 0, Math.PI * 2); ctx.arc(168, 173, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(244, 63, 94, 0.35)';
+      ctx.beginPath(); ctx.arc(122, 192, 10, 0, Math.PI * 2); ctx.arc(178, 192, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(150, 185, 10, 0, Math.PI, false); ctx.stroke();
+    }
+
+    function loadSavedCharacterImage() {
+      const savedImg = localStorage.getItem('custom_nutritionist_image');
+      const canvas = document.getElementById('nutritionistCanvas');
+      if (savedImg) {
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        img.src = savedImg;
+        img.onload = () => {
+          canvas.width = img.width; canvas.height = img.height;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        };
+      } else {
+        drawNutritionistAvatar();
+      }
+    }
+
+    function handleImageSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const base64Data = e.target.result;
+        const canvas = document.getElementById('nutritionistCanvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        img.src = base64Data;
+        img.onload = () => {
+          canvas.width = img.width; canvas.height = img.height;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        };
+        try { localStorage.setItem('custom_nutritionist_image', base64Data); } catch (e) {}
+        playSound('clear');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    window.onload = function() {
+      loadSavedCharacterImage();
+      updateStudy();
+    }
+  </script>
+</body>
+</html>
